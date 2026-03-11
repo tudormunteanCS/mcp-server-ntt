@@ -2,10 +2,7 @@
     "mcpServers": {
       "github-server": {
         "command": "uv",
-        "args": ["run", "/absolute/path/to/mcp-server/src/server.py"],
-        "env": {
-          "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-        }
+        "args": ["run", "${workspaceFolder}/src/server.py"]
       }
     }
 }
