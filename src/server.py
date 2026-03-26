@@ -40,7 +40,7 @@ def list_open_issues(repo_name = "tudormunteanCS/lawgentic") -> str:
     return "\n".join([f"#{i.number}: {i.title}" for i in issues])
 
 @mcp.tool()
-def get_file_content(repo_name = "tudormunteanCS/lawgentic", file_path: str) -> str:
+def get_file_content(file_path: str, repo_name: str = "tudormunteanCS/lawgentic") -> str:
     """Get the content of a file from a GitHub repo."""
     gh = get_github_client()
     repo = gh.get_repo(repo_name)
@@ -60,4 +60,3 @@ def whoami() -> str:
     
 if __name__ == "__main__":
     mcp.run()
-    print("integrated confluence")
