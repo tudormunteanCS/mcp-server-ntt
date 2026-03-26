@@ -54,6 +54,10 @@ def whoami() -> str:
     user = gh.get_user()
     return f"Authenticated as: {user.login} ({user.name})"
 
+
+
+
     
 if __name__ == "__main__":
     mcp.run()
+    print("integrated confluence")
