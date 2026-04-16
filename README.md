@@ -27,5 +27,37 @@ How to check that you mcp server is actually up and running.
 You can run in cursor agent the next prompt that shows that confluence is integrated:
     "Search confluence to find the lawgentic documentation and fetch me the story about the pig"
 
+---------------------
+Tested Tools
 
+`Who am I authentificated as?`
+Authenticated as: tudormunteanCS (Muntean Tudor)
+
+`Get repo info for tudormunteanCS/Law-Agent*`
+Name: Law-Agent
+Description: None
+Stars: 0
+Forks: 0
+Language: Python
+
+`List Confluence spaces`
+~7120206dc0765a1fbe4a2c9c46af95e637a359: Darius Toasca
+~6411ee036b29c052ab2c9bbb: Robert Barbulescu
+SD: Software development
+~712020cc8a634f65b74ee3b1dd1af89ef2fb47: Tudor Muntean
+
+`Search Confluence for 'pig'`
+--- Lawgentic - documentation ---
+Polymorphism for lawgentic:A pig is like a tale, a pig can have tail and not be pale.
+
+`Search Confluence for 'architecture'`
+Conversational RAG agent for Romanian legislation, built on Flask + Qdrant + OpenAI...
+
+The search results are noisy and need polishing to provide more concise and organised answers.
+
+`List open issues for tudormunteanCS/Law-Agent`
+<empty string> - this one is usable but noisy, the fix would be an output like "No open issues"
+
+
+    
 
