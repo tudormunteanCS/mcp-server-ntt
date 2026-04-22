@@ -24,15 +24,27 @@ def get_github_client() -> Github:
 
 @mcp.tool()
 def get_repo_info(repo_name = "tudormunteanCS/Law-Agent") -> str:
-    """Get basic info about a hardcoded GitHub repo."""
+    """Get high-signal metadata for a GitHub repo."""
     gh = get_github_client()
     repo = gh.get_repo(repo_name)
+    description = repo.description or "No description set"
+    homepage = repo.homepage or "Not set"
+    topics = ", ".join(repo.get_topics()) if repo.get_topics() else "None"
+    default_branch = repo.default_branch or "unknown"
+    visibility = "private" if repo.private else "public"
+
     return f"""
-    Name: {repo.name}
-    Description: {repo.description}
+    Repository: {repo.full_name}
+    Description: {description}
+    Visibility: {visibility}
+    Primary language: {repo.language or "Unknown"}
+    Default branch: {default_branch}
     Stars: {repo.stargazers_count}
     Forks: {repo.forks_count}
-    Language: {repo.language}
+    Open issues: {repo.open_issues_count}
+    Topics: {topics}
+    Homepage: {homepage}
+    URL: {repo.html_url}
     """
 
 @mcp.tool()
@@ -49,15 +61,37 @@ def get_file_content(file_path: str, repo_name: str = "tudormunteanCS/Law-Agent"
     gh = get_github_client()
     repo = gh.get_repo(repo_name)
     content = repo.get_contents(file_path)
-    return content.decoded_content.decode("utf-8")
+    if isinstance(content, list):
+        entries = [f"- [{item.type}] {item.path}" for item in content[:20]]
+        listing = "\n".join(entries) if entries else "(empty directory)"
+        return (
+            f"Path '{file_path}' este un director, nu un fișier.\n"
+            "Alege un fișier din listă:\n"
+            f"{listing}"
+        )
+    try:
+        return content.decoded_content.decode("utf-8")
+    except UnicodeDecodeError:
+        return (
+            f"Fișierul '{file_path}' nu este text UTF-8 (probabil binar). "
+            "Te rog dă un path către un fișier text."
+        )
 
 @mcp.tool()
 def whoami() -> str:
     """Check which GitHub account the token authenticates as."""
     gh = get_github_client()
     user = gh.get_user()
-    return f"Authenticated as: {user.login} ({user.name})"
-
+    return (
+        f"GitHub identity\n"
+        f"- Login: {user.login}\n"
+        f"- Name: {user.name or 'Not set'}\n"
+        f"- Account type: {user.type}\n"
+        f"- Public repos: {user.public_repos}\n"
+        f"- Followers: {user.followers} | Following: {user.following}\n"
+        f"- Profile: {user.html_url}\n"
+        f"- Status: Token is valid"
+    )
 
 def get_confluence_client() -> Confluence:
     url = os.getenv("CONFLUENCE_URL")
@@ -153,18 +187,29 @@ def search_confluence_pages(query: str, limit: int = 10) -> str:
     if not pages:
         return f"No pages found matching: '{query}'"
 
-    lines = []
-    for p in pages:
+    lines = [f'Found {len(pages)} page(s) for "{query}"', ""]
+    for idx, p in enumerate(pages, start=1):
         content = p.get("content", {}) or {}
         page_id = content.get("id", "?")
         title = content.get("title", "(untitled)")
-        space_key = (content.get("space") or {}).get("key") or (p.get("resultGlobalContainer") or {}).get("displayName", "")
+        space_key = (
+            (content.get("space") or {}).get("key")
+            or (p.get("resultGlobalContainer") or {}).get("displayName")
+            or "N/A"
+        )
         excerpt = _clean_html(p.get("excerpt", ""))
-        if len(excerpt) > 240:
-            excerpt = excerpt[:240].rstrip() + "…"
-        space_part = f"[{space_key}] " if space_key else ""
-        lines.append(f"{page_id} | {space_part}{title}" + (f" — {excerpt}" if excerpt else ""))
-
+        if len(excerpt) > 200:
+            excerpt = excerpt[:200].rstrip() + "…"
+        if not excerpt:
+            excerpt = "No excerpt available."
+        lines.append(f"[{idx}]")
+        lines.append(f"ID: {page_id}")
+        lines.append(f"Space: {space_key}")
+        lines.append(f"Title: {title}")
+        lines.append(f"Excerpt: {excerpt}")
+        # separator between entries
+        if idx < len(pages):
+            lines.append("---")
     return "\n".join(lines)
 
 
@@ -265,33 +310,89 @@ def get_confluence_page_by_title(title: str, space_key: Optional[str] = None) ->
 
 @mcp.tool()
 def list_confluence_pages_in_space(space_key: str, limit: int = 25) -> str:
-    """List pages in a Confluence space as 'id | title'."""
+    """
+    List pages in a Confluence space with useful metadata.
+    Output includes: id, title, status, last update time, and page URL.
+    """
     cf = get_confluence_client()
-    pages = cf.get_all_pages_from_space(space_key, start=0, limit=limit)
+
+    # We use CQL because it returns rich metadata and links in one call.
+    safe_space = _escape_cql(space_key)
+    results = cf.cql(
+        f'space = "{safe_space}" AND type = page ORDER BY title',
+        limit=limit,
+    )
+    pages = results.get("results", [])
+
     if not pages:
         return f"No pages found in space '{space_key}'."
-    return "\n".join(f"{p['id']} | {p['title']}" for p in pages)
+
+    base_url = os.getenv("CONFLUENCE_URL", "").rstrip("/")
+    lines = [
+        f"Space: {space_key}",
+        f"Returned: {len(pages)} page(s) (limit={limit})",
+        "",
+    ]
+
+    for idx, p in enumerate(pages, start=1):
+        content = p.get("content", {}) or {}
+        page_id = content.get("id", "?")
+        title = content.get("title", "(untitled)")
+        status = content.get("status", "unknown")
+
+        version = content.get("version") or {}
+        updated_at = version.get("when", "unknown")
+
+        links = content.get("_links") or {}
+        webui = links.get("webui", "")
+        page_url = f"{base_url}{webui}" if base_url and webui else "URL unavailable"
+
+        lines.append(f"[{idx}] ID: {page_id}")
+        lines.append(f"Title: {title}")
+        lines.append(f"Status: {status}")
+        lines.append(f"Updated: {updated_at}")
+        lines.append(f"URL: {page_url}")
+        if idx < len(pages):
+            lines.append("---")
+
+    return "\n".join(lines)
 
 
 @mcp.tool()
-def search_confluence_content(query: str, limit: int = 3, max_chars: int = 3000) -> str:
-    """Search Confluence and return the full cleaned content of each matching page."""
+def search_confluence_content(
+    query: str,
+    limit: int = 3,
+    max_chars: int = 3000,
+    max_words: int = 500,
+) -> str:
+    """Search Confluence and return cleaned page content (with word/char truncation)."""
     cf = get_confluence_client()
     safe = _escape_cql(query)
     results = cf.cql(f'text ~ "{safe}" AND type = page', limit=limit)
     pages = results.get("results", [])
-
     if not pages:
         return f"No pages found matching: '{query}'"
-
     output = []
     for p in pages:
         page_id = p["content"]["id"]
         full_page = cf.get_page_by_id(page_id, expand="body.storage")
         body = full_page["body"]["storage"]["value"]
         clean = _clean_html(body)
-        if len(clean) > max_chars:
-            clean = clean[:max_chars].rstrip() + "…"
-        output.append(f"--- {full_page['title']} (id={page_id}) ---\n{clean}")
+        truncated = False
 
+        words = clean.split()
+        if len(words) > max_words:
+            clean = " ".join(words[:max_words])
+            truncated = True
+
+        if len(clean) > max_chars:
+            clean = clean[:max_chars].rstrip()
+            truncated = True
+        if truncated:
+            clean += "… [truncated]"
+        output.append(f"--- {full_page['title']} (id={page_id}) ---\n{clean}")
     return "\n\n".join(output)
+    
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
